@@ -50,13 +50,16 @@ int main() {
     p->InsertEndChild(text);
 
     // Speichern der XML-Datei auf der Festplatte
-    doc.SaveFile("example.xml");
+    std::cout << "Wie soll die datei heißen?\n";
+    std::string name;
+    std::cin >> name;
+    doc.SaveFile(name.c_str());
     std::cout << "XML-Datei erfolgreich erstellt!" << std::endl;
 
     // *** PDF-Erstellung basierend auf der XML-Datei ***
 
     // XML-Datei öffnen und parsen
-    if (doc.LoadFile("example.xml") != tinyxml2::XML_SUCCESS) {
+    if (doc.LoadFile(name.c_str()) != tinyxml2::XML_SUCCESS) {
         std::cerr << "Fehler beim Laden der XML-Datei!" << std::endl;
         return -1;
     }
