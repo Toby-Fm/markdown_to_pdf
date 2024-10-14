@@ -6,9 +6,6 @@
 #define MAIN_HPP
 #include <iostream>
 
-void hello()
-{
-    std::cout << "Hello World!\n";
-}
+
 
 #endif //MAIN_HPP
