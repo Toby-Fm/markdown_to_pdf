@@ -3,3 +3,7 @@ all:
 
 linux_install:
 	sudo apt install libtinyxml2-dev
+
+
+clear:
+	rm -rf build/*
