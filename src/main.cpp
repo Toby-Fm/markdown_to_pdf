@@ -1,71 +1,40 @@
-#include "tinyxml2.h"  // Einfügen der TinyXML2-Bibliothek
-#include <hpdf.h>      // Einfügen der libharu-Bibliothek für die PDF-Erstellung
 #include <iostream>
+#include <fstream>
+#include <sstream>
 #include <string>
+#include <hpdf.h>
+#include "cmark.h" // Einfügen der cmark-Bibliothek
 
 // Fehlerbehandlungsfunktion für die PDF-Erstellung
-void error_handler(HPDF_STATUS error_no, HPDF_STATUS detail_no, void *user_data) {
+void error_handler(HPDF_STATUS error_no, HPDF_STATUS detail_no, void* user_data) {
     std::cerr << "PDF Error: " << error_no << ", detail: " << detail_no << std::endl;
 }
 
 int main() {
-    // *** XML-Erstellung ***
+    // *** Markdown-Datei einlesen ***
+    std::string markdown_filename = "test.md";
 
-    tinyxml2::XMLDocument doc; // Erstellen eines XML-Dokuments
-
-    // Erstellen der XML-Deklaration
-    tinyxml2::XMLDeclaration* decl = doc.NewDeclaration("xml version=\"1.0\" encoding=\"UTF-8\"");
-    doc.InsertFirstChild(decl);
-
-    // Erstellen des Wurzelelements <document>
-    tinyxml2::XMLElement* root = doc.NewElement("document");
-    doc.InsertEndChild(root);
-
-    // Hinzufügen eines Elements <h1> mit Textinhalt
-    tinyxml2::XMLElement* h1 = doc.NewElement("h1");
-    h1->SetText("Überschrift 1");
-    root->InsertEndChild(h1);
-
-    // Hinzufügen eines Elements <p> mit verschachtelten Tags
-    tinyxml2::XMLElement* p = doc.NewElement("p");
-    p->SetText("Ein ");
-    root->InsertEndChild(p);
-
-    // Hinzufügen von <strong> innerhalb von <p>
-    tinyxml2::XMLElement* strong = doc.NewElement("strong");
-    strong->SetText("fetter");
-    p->InsertEndChild(strong);
-
-    // Fortsetzen des Textes innerhalb von <p>
-    tinyxml2::XMLText* text = doc.NewText(" und ");
-    p->InsertEndChild(text);
-
-    // Hinzufügen von <em> innerhalb von <p>
-    tinyxml2::XMLElement* em = doc.NewElement("em");
-    em->SetText("kursiver");
-    p->InsertEndChild(em);
-
-    // Hinzufügen des letzten Teils des Textes
-    text = doc.NewText(" Text.");
-    p->InsertEndChild(text);
-
-    // Speichern der XML-Datei auf der Festplatte
-    std::cout << "Wie soll die datei heißen?\n";
-    std::string name;
-    std::cin >> name;
-    doc.SaveFile(name.c_str());
-    std::cout << "XML-Datei erfolgreich erstellt!" << std::endl;
-
-    // *** PDF-Erstellung basierend auf der XML-Datei ***
-
-    // XML-Datei öffnen und parsen
-    if (doc.LoadFile(name.c_str()) != tinyxml2::XML_SUCCESS) {
-        std::cerr << "Fehler beim Laden der XML-Datei!" << std::endl;
+    std::ifstream markdown_file(markdown_filename);
+    if (!markdown_file.is_open()) {
+        std::cerr << "Fehler beim Öffnen der Datei " << markdown_filename << "!" << std::endl;
         return -1;
     }
 
-    tinyxml2::XMLElement* rootElement = doc.RootElement();  // Wurzelelement <document>
+    std::stringstream markdown_buffer;
+    markdown_buffer << markdown_file.rdbuf();
+    std::string markdown_content = markdown_buffer.str();
 
+    // *** Markdown zu HTML konvertieren ***
+    cmark_node* node = cmark_parse_document(markdown_content.c_str(), markdown_content.length(), CMARK_OPT_DEFAULT);
+    char* html_content = cmark_render_html(node, CMARK_OPT_DEFAULT);
+    cmark_node_free(node);
+
+    // Optional: HTML-Inhalt in eine Datei schreiben (zu Debugging-Zwecken)
+    std::ofstream html_file("output.html");
+    html_file << html_content;
+    html_file.close();
+
+    // *** HTML parsen und PDF erstellen ***
     // PDF-Dokument initialisieren
     HPDF_Doc pdf = HPDF_New(error_handler, nullptr);
     if (!pdf) {
@@ -73,53 +42,82 @@ int main() {
         return -1;
     }
 
+    // Verwende die eingebaute Standard-Schriftart Helvetica
+    HPDF_Font font = HPDF_GetFont(pdf, "Helvetica", nullptr);
+
     // Erstellen einer neuen PDF-Seite
     HPDF_Page page = HPDF_AddPage(pdf);
     HPDF_Page_SetSize(page, HPDF_PAGE_SIZE_A4, HPDF_PAGE_PORTRAIT);
 
-    // Schriftart und Größe festlegen
-    HPDF_Font font = HPDF_GetFont(pdf, "Helvetica", "WinAnsiEncoding");
+    // Standard-Schriftart und Größe festlegen
     HPDF_Page_SetFontAndSize(page, font, 12);
 
-    // Schreiben von Text aus der XML-Datei ins PDF
     float ypos = 800; // Startposition für den Text auf der PDF-Seite
+    const float line_spacing = 20.0f; // Abstand zwischen Textblöcken
 
-    // Durchlaufen der XML-Elemente
-    for (tinyxml2::XMLElement* element = rootElement->FirstChildElement(); element != nullptr; element = element->NextSiblingElement()) {
-        const char* tagName = element->Name();
-        const char* elementText = element->GetText();
+    // Einfacher HTML-Parser
+    std::istringstream html_stream(html_content);
+    std::string line;
 
-        if (strcmp(tagName, "h1") == 0) {
-            // Überschrift 1
+    while (std::getline(html_stream, line)) {
+        // Entfernen von führenden und nachfolgenden Leerzeichen
+        line.erase(0, line.find_first_not_of(" \t\r\n"));
+        line.erase(line.find_last_not_of(" \t\r\n") + 1);
+
+        if (line.empty()) {
+            continue;
+        }
+
+        if (line.find("<h1>") != std::string::npos) {
+            std::string text = line.substr(4, line.find("</h1>") - 4);
             HPDF_Page_BeginText(page);
-            HPDF_Page_SetFontAndSize(page, font, 24);  // Größere Schriftart für Überschriften
-            HPDF_Page_TextOut(page, 50, ypos, elementText);
+            HPDF_Page_SetFontAndSize(page, font, 24);  // Größere Schriftart für Überschrift
+            HPDF_Page_TextOut(page, 50, ypos, text.c_str());
             HPDF_Page_EndText(page);
-            ypos -= 30;  // Platz für die nächste Zeile
-        } else if (strcmp(tagName, "p") == 0) {
-            // Absatz
-            for (tinyxml2::XMLElement* child = element->FirstChildElement(); child != nullptr; child = child->NextSiblingElement()) {
-                const char* childTagName = child->Name();
-                const char* childText = child->GetText();
+            ypos -= (line_spacing + 30);  // Zusätzlicher Abstand für Überschrift
+        } else if (line.find("<p>") != std::string::npos) {
+            std::string text = line.substr(3, line.find("</p>") - 3);
 
-                if (strcmp(childTagName, "strong") == 0) {
-                    // Fettdruck
+            size_t pos = 0;
+            while (pos < text.length()) {
+                if (text.find("<strong>", pos) == pos) {
+                    pos += 8;
+                    size_t end = text.find("</strong>", pos);
+                    std::string bold_text = text.substr(pos, end - pos);
+
                     HPDF_Page_BeginText(page);
                     HPDF_Page_SetFontAndSize(page, font, 12);
-                    HPDF_Page_SetTextRenderingMode(page, HPDF_FILL_THEN_STROKE);  // Fettdruck
-                    HPDF_Page_TextOut(page, 50, ypos, childText);
+                    HPDF_Page_TextOut(page, 50, ypos, bold_text.c_str());
                     HPDF_Page_EndText(page);
-                    ypos -= 20;
-                } else if (strcmp(childTagName, "em") == 0) {
-                    // Kursiv
+
+                    pos = end + 9;
+                } else if (text.find("<em>", pos) == pos) {
+                    pos += 4;
+                    size_t end = text.find("</em>", pos);
+                    std::string italic_text = text.substr(pos, end - pos);
+
                     HPDF_Page_BeginText(page);
                     HPDF_Page_SetFontAndSize(page, font, 12);
-                    HPDF_Page_SetTextRenderingMode(page, HPDF_FILL);  // Kursiv (möglicherweise durch andere Schrift ersetzen)
-                    HPDF_Page_TextOut(page, 50, ypos, childText);
+                    HPDF_Page_TextOut(page, 50, ypos, italic_text.c_str());
                     HPDF_Page_EndText(page);
-                    ypos -= 20;
+
+                    pos = end + 5;
+                } else {
+                    size_t next_tag = text.find('<', pos);
+                    if (next_tag == std::string::npos) {
+                        next_tag = text.length();
+                    }
+                    std::string normal_text = text.substr(pos, next_tag - pos);
+
+                    HPDF_Page_BeginText(page);
+                    HPDF_Page_SetFontAndSize(page, font, 12);
+                    HPDF_Page_TextOut(page, 50, ypos, normal_text.c_str());
+                    HPDF_Page_EndText(page);
+
+                    pos = next_tag;
                 }
             }
+            ypos -= line_spacing;  // Abstand zwischen Textblöcken
         }
     }
 
@@ -128,6 +126,9 @@ int main() {
     HPDF_Free(pdf);
 
     std::cout << "PDF-Datei erfolgreich erstellt!" << std::endl;
+
+    // Speicher freigeben
+    free(html_content);
 
     return 0;
 }
