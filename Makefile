@@ -1,5 +1,6 @@
 all:
-	mkdir -p build && cd build/ && cmake .. && make
+	cp -r src/test.md build/
+	cd build/ && cmake .. && make
 
 linux_install:
 	sudo apt install libtinyxml2-dev \
