@@ -3,9 +3,9 @@ all:
 	cd build/ && cmake .. && make
 
 linux_install:
-	sudo apt install libtinyxml2-dev \
+	sudo pacman -S libtinyxml2-dev \
 	mkdir -p ~/Downloads/ \
-	git clone https://github.com/commonmark/cmark.git ~/Downloads/ \
+	git clone https://github.com/commonmark/cmark.git ~/Downloads/repos/ \
     cd cmark \
     make \
     sudo make install
